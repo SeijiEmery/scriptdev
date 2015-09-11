@@ -67,27 +67,46 @@ inject(this, function () {
         }
     }
 
-    // Simple flocking simulation.
-    // Not tested (yet), and can be optimized as needed.
-    function Flock () {
-        // List of entities we're simulating. For simplicity, we do not care about their current
-        // state (Entity.getProperties), and only send updates (Entity.editEntity). Furthermore, 
-        // it's left up to the caller to ensure that our simulation instance is only called by one
-        // thread.
-        this.simulatedEntities = [];
-        
-        // List of flocking rules, which implement the actual flocking behavior
-        this.rules = {};
+    // Flock class
+    define('Flock', ['Rule'], function(Rule) {
+        // Simple flocking simulation.
+        // Not tested (yet), and can be optimized as needed.
+        function Flock () {
+            // List of entities we're simulating. For simplicity, we do not care about their current
+            // state (Entity.getProperties), and only send updates (Entity.editEntity). Furthermore, 
+            // it's left up to the caller to ensure that our simulation instance is only called by one
+            // thread.
+            this.simulatedEntities = [];
+            
+            // List of flocking rules, which implement the actual flocking behavior
+            this.rules = {};
+    
+            // Limit speed of entities. Disabled if set below zero (-1).
+            this.MAX_SPEED = DEFAULT_MAX_SPEED;
+    
+            // Enable / disable on-script physics calculations
+            this.SIMULATE_PHYSICS_ON_SCRIPT = SIMULATE_PHYSICS_ON_SCRIPT;
+            this._lastSimWasOnScript = this.SIMULATE_PHYSICS_ON_SCRIPT;
+            this.POSITION_SYNC_THRESHOLD = 0.001;
+            this.VELOCITY_SYNC_THRESHOLD = 0.001;
+        }
 
-        // Limit speed of entities. Disabled if set below zero (-1).
-        this.MAX_SPEED = DEFAULT_MAX_SPEED;
 
-        // Enable / disable on-script physics calculations
-        this.SIMULATE_PHYSICS_ON_SCRIPT = SIMULATE_PHYSICS_ON_SCRIPT;
-        this._lastSimWasOnScript = this.SIMULATE_PHYSICS_ON_SCRIPT;
-        this.POSITION_SYNC_THRESHOLD = 0.001;
-        this.VELOCITY_SYNC_THRESHOLD = 0.001;
-    }
+        return {
+            Flock: Flock
+        };
+    });
+
+    // Rule class
+    define('Rule', [], function() {
+        function Rule () {
+
+        }
+
+        return {
+            Rule: Rule
+        };
+    });
 
     var SUPPORTED_RULE_PROPERTIES = {
         before: 'function',
@@ -352,29 +371,66 @@ inject(this, function () {
     print("Loaded flocking.js");
 
     // Attach methods
-    inject(Flock.prototype, function () { return {   // inject.js
-        toString: toString,
-        attachEntity: attachEntity,
-        removeEntity: removeEntity,
-        addRule: addRule,
-        removeRule: removeRule,
-        enableRule: enableRule,
-        disableRule: disableRule,
-        simulate: simulate,
-        destroy: destroy,
-        MAX_SPEED: DEFAULT_MAX_SPEED,
-    }; });
+    // inject(Flock.prototype, function () { return {   // inject.js
+    //     toString: toString,
+    //     attachEntity: attachEntity,
+    //     removeEntity: removeEntity,
+    //     addRule: addRule,
+    //     removeRule: removeRule,
+    //     enableRule: enableRule,
+    //     disableRule: disableRule,
+    //     simulate: simulate,
+    //     destroy: destroy,
+    //     MAX_SPEED: DEFAULT_MAX_SPEED,
+    // }; });
 
     // Export to global scope.
     // Could be done async (AMD, etc)
-    return {
-        Flock: Flock
-    };
+    // return {
+        // Flock: Flock
+    // };
+
+    // AMD define (just used interally)
+    var exports = {};
+    function define (name, dependencies, closure) {
+        var modules = exports;
+        function tryLoad(closure, deps) {
+            var canLoad = true;
+            var rdeps = deps.map(function(dep) {
+                switch (typeof(modules[dep])) {
+                    case 'object': return modules[dep];
+                    case 'function': var o = modules[dep]();
+                        return o ? (modules[dep] = o) : (canLoad = false), null;
+                    default: canLoad = false;
+                        return null;
+                }
+            });
+            return canLoad ? closure.apply(null, rdeps) : null;
+        }
+        if (!(exports[name] = tryLoad(closure, deps))) {
+            exports[name] = function () {
+                return tryLoad(closure, deps);
+            }
+        }
+    }
+    // Load all unloaded modules
+    (function () {
+        Object.keys(exports).forEach(function(k) {
+            if (typeof(exports[k]) === 'function') {
+                if (!(exports[k] = exports[k]())) {
+                    throw new TypeError("flocking.js internal error -- missing dependencies for '"+k+"'");
+                } else {
+                    print("Loaded unloaded module '"+k+"'");
+                }
+            }
+        }
+    })();
 });
 
 // hack
 if (typeof(Flock) === 'undefined') {
     Flock = this.Flock;
+    Rule = this.Rule;
 }
 
 
