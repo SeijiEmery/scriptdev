@@ -10,30 +10,60 @@
 // Implements generic flocking behavior via the Flock class.
 //
 
-var RELATIVE_INCLUDES_WORKING = false;  // this really needs to be implemented at some point...
+// Load libraries
+(function () {
+    include({
+        files: [
+            { src: 'three/Three.js', check: function () { return typeof(THREE) !== 'undefined' }},
+            { src: 'three/math/src/Vector3.js', check: function () { return typeof(THREE.Vector3) !== 'undefined' }},
+            { src: 'require.js', check: function () { return typeof(require) === 'function' && typeof(define) === 'function' }},
+            { src: 'inject.js', check: function () { return typeof(inject) === 'function' }},
+            { src: 'arrayUtils.js' }
+        ],
+        paths: ['', 'https://dl.dropboxusercontent.com/u/4386006/hifi/js/libraries/']
+    })
 
+    function include(context) {
+        var loaded = {};
+        if (!context.paths) { 
+            context.paths = ['']; 
+        }
+        var failures = [];
+        context.files.forEach(function(file) {
+            var loaded = false;
+            context.paths.forEach(function(path) {
+                if (!loaded) {
+                    var absPath = path + file.src;
+                    try {
+                        Script.include(absPath)
+                    } catch (e) {
+                        throw new Error("While loading '" + absPath + "': " + e.message);
+                    }
+                    if (typeof(file.check) !== 'function' || file.check()) {
+                        loaded = true;
+                        print("Loaded " + file.src);
+                    }
+                }
+            }, this);
+            if (!loaded) {
+                failures.push(file.src);
+            }
+        }, this);
+
+        if (failures.length > 0) {
+            print("Failed to load " + failures.length + " file(s): " + failures.join(', '));
+            throw new Error("Could not load flocking.js libraries");
+        }
+    }
+})();
+
+// Add console.log
 if (typeof(console) === 'undefined') {
     console = {
         log: function () {
             print(Array.prototype.join.call(arguments, " "));
         }
     }
-}
-
-if (RELATIVE_INCLUDES_WORKING) {
-    Script.include([
-        // 'three/Three.js',
-        'three/math/Vector3.min.js',
-        'inject.js',
-        'arrayUtils.js',
-    ]);
-} else {
-    Script.include([
-        'https://dl.dropboxusercontent.com/u/4386006/hifi/js/libraries/three/Three.js',
-        'https://dl.dropboxusercontent.com/u/4386006/hifi/js/libraries/three/math/src/Vector3.js',
-        'https://dl.dropboxusercontent.com/u/4386006/hifi/js/libraries/inject.js',
-        'https://dl.dropboxusercontent.com/u/4386006/hifi/js/libraries/arrayUtils.js',
-    ]);
 }
 
 // Uses three.js for vector calculations. This is ~50x faster (benchmarked), and does not waste as much memory as the wrapped 
@@ -65,95 +95,6 @@ inject(exports, function () {
             // default: return 0.0001 * entity.density; // really shitty, but this is equivalent to a 0.1 x 0.1 x 0.1 cube...
         }
     }
-
-    // AMD define (just used interally)
-    // var loadedModules = {};
-    // var pendingModules = {};
-    // function define(name, dependencies, closure) {
-    //     var canLoad = true;
-    //     var rdeps = dependencies.map(function(dep) {
-    //         if (loadedModules[dep]) {
-    //             return loadedModules[dep];
-    //         } else {
-    //             return canLoad = false, null;
-    //         }
-    //     });
-    //     if (canLoad) {
-    //         loadedModules[name] = closure.call(null, rdeps);
-    //         if (pendingDeps[name]) {
-    //             pendingDeps[name].forEach(function(dep) {
-    //                 if (--dep.count <= 0) {
-    //                     loadedModules[dep.name] = dep.closure.call()
-    //                 }
-    //             });
-    //         }
-    //     } else {
-
-    //     }
-    // }
-    // function PendingModule (name, dependencyList, missingDependencies, load) {
-    //     this.name = name;
-    //     this.dependencies = dependencyList;
-    //     this.missingDependencyCount = missingDependencyCount
-    //     this.missingDependencies = missingDependencies;
-    //     this.load = load;
-    // }
-    // PendingModule.prototype.resolvedDependency(dependency) {
-    //     if (this.missingDependencies[dependency]) {
-    //         delete this.missingDependencies[dependency]
-    //         this.dependencyList[this.missingDependencies[dependency]] 
-    //     }
-    // }
-
-    var exports = {};
-    function define 
-
-    function define (name, dependencies, closure) {
-        function tryLoad(modules, closure, deps) {
-            var canLoad = true;
-            var rdeps = deps.map(function(dep) {
-                switch (typeof(modules[dep])) {
-                    case 'object': return modules[dep];
-                    case 'function': 
-                        print("Loading '" + dep + "'");
-                        var o = modules[dep]();
-                        if (o) {
-                            print("Loaded '" + dep + '"');
-                            return (modules[dep] = o);
-                        } else {
-                            print("Can't load '" + dep + "' yet");
-                            return null;
-                        }
-                    default: canLoad = false;
-                        print("Dep '" + dep + "' doesn't exist yet");
-                        return null;
-                }
-            });
-            return canLoad ? closure.apply(null, rdeps) : null;
-        }
-        print("Defining '" + name + "'");
-        if (!(exports[name] = tryLoad(exports, closure, dependencies))) {
-            exports[name] = function () {
-                return tryLoad(exports, closure, dependencies);
-            }
-        } else {
-            print("Loaded '" + name + "'");
-        }
-    }
-    // Load all unloaded modules
-    function loadAll() {
-        Object.keys(exports).forEach(function(k) {
-            if (typeof(exports[k]) === 'function') {
-                exports[k] = exports[k]();
-                if (!exports[k]) {
-                    throw new TypeError("flocking.js internal error -- missing dependencies for '"+k+"'");
-                } else {
-                    print("Loaded '"+k+"'");
-                }
-            }
-        });
-    }
-
     // Entity class (just for flocking -- not exported)
     define('FlockingEntity', [], function() {
         function FlockingEntity (entityId, hasOwnership) {
@@ -489,7 +430,6 @@ inject(exports, function () {
         return Rule;
     });
 
-    loadAll();
     print("Loaded flocking.js");
     return exports;
 });
