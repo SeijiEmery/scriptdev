@@ -10,25 +10,31 @@
 // Basic demo for the flocking.js library.
 //
 
-Script.include('../../libraries/flocking.js')
-if (typeof(Flock) !== 'function') {
-	print("Local include failed -- using global include");
-	Script.include('https://dl.dropboxusercontent.com/u/4386006/hifi/js/libraries/flocking.js');
-	if (typeof(Flock) !== 'function') {
-		throw new Error("Could not load the flocking library (flocking.js)")
-	}
-}
+// Script.include('../../libraries/flocking.js')
+// if (typeof(Flock) !== 'function') {
+// 	print("Local include failed -- using global include");
+// 	Script.include('https://dl.dropboxusercontent.com/u/4386006/hifi/js/libraries/flocking.js');
+// 	if (typeof(Flock) !== 'function') {
+// 		throw new Error("Could not load the flocking library (flocking.js)")
+// 	}
+// }
+
+Script.include('require.js');
+require.externals({
+	modules: ['Flock'],
+	urls: ['flocking.js']
+});
+
 // Example
-(function () {
+// (function () {
+require(['Flock', 'FlockingRule'], function(Flock, Rule) {
     var flock = new Flock();
     var NUM_ENTITIES = 20;
-
-    print("created flock");	
 
     // Create entities
     var center = MyAvatar.position;
     for (var i = 0; i < NUM_ENTITIES; ++i) {
-        flock.attachEntity(
+        flock.addEntity(
             Entities.addEntity({
                 type: "Box",
                 position: {
@@ -47,51 +53,76 @@ if (typeof(Flock) !== 'function') {
             }), true);
     }
 
-    // Attach rules
-    flock.addRule('gravity', {
-    	eachEntity: function () {
+    flock.addRule('gravity', new Rule()
+    	.eachEntity(function(){
     		return new Vector3(0, -0.1, 0);
-    	}
-    });
-    flock.addRule('attraction', {
-    	before: function (entities) {
-    		// Calculate average center of all entities
+    	}));
+    flock.addRule('attraction', new Rule()
+    	.before(function(entities) {
     		this.center = new Vector3();
-    		entities.forEach(function (entity) {
-    			this.center.add(entity.position);
-    		}, this);
-    		this.center.multiplyScalar(1 / entities.length);
-    	},
-    	eachEntity: function (entities, i) {
-    		var dir = new Vector3().subVectors(this.center, entities[i].position);
-    		return dir.multiplyScalar(3);
-    	}
-    });
-    flock.addRule('separation', {
-    	eachTwoEntities: function (entities, i, j) {
-    		var dir = new Vector3().subVectors(entities[i].position, entities[j].position);
-    		if (dir.length < 1.0) {
-    			return dir.multiplyScalar(5);
-    		}
-    	}
-    });
-    flock.addRule('pullTowardsMe', {
-    	eachEntity: function (entities, i) {
-    		var dir = new Vector3.subVectors(MyAvatar.position, entities[i].position);
-    		if (dir.length >= 2.0) {
-    			return dir.multiplyScalar(50);
-    		} else {
-    			return dir.multiplyScalar(10.0);
-    		}
-    	}
-    });
+    	})
+    	.eachEntity(function(entity, i) {
+    		// ...
+    	}))
 
-    print("Setting up rules");
-    flock.addRule('alignment', {
-    	before: function(entities) {
-    		// print("Alignment called");
-    	}
-    });
+
+    flock.addRule('localizedAttraction', new Rule()
+    	.before(function() { this.center = new Vector3(); })
+    	.eachTwoEntitiesInRange(10.0, function (entities, i, j) {
+    		this.center.set(0, 0, 0);
+    	}));
+
+    // Edit rule: change range while preserving fcn
+    flock.editRule('localizedAttraction')
+    	.eachTwoEntitiesInRange(20.0, null);
+
+    flock.deleteRule('localizedAttraction');
+
+    // Attach rules
+    // flock.addRule('gravity', {
+    // 	eachEntity: function () {
+    // 		return new Vector3(0, -0.1, 0);
+    // 	}
+    // });
+    // flock.addRule('attraction', {
+    // 	before: function (entities) {
+    // 		// Calculate average center of all entities
+    // 		this.center = new Vector3();
+    // 		entities.forEach(function (entity) {
+    // 			this.center.add(entity.position);
+    // 		}, this);
+    // 		this.center.multiplyScalar(1 / entities.length);
+    // 	},
+    // 	eachEntity: function (entities, i) {
+    // 		var dir = new Vector3().subVectors(this.center, entities[i].position);
+    // 		return dir.multiplyScalar(3);
+    // 	}
+    // });
+    // flock.addRule('separation', {
+    // 	eachTwoEntities: function (entities, i, j) {
+    // 		var dir = new Vector3().subVectors(entities[i].position, entities[j].position);
+    // 		if (dir.length < 1.0) {
+    // 			return dir.multiplyScalar(5);
+    // 		}
+    // 	}
+    // });
+    // flock.addRule('pullTowardsMe', {
+    // 	eachEntity: function (entities, i) {
+    // 		var dir = new Vector3.subVectors(MyAvatar.position, entities[i].position);
+    // 		if (dir.length >= 2.0) {
+    // 			return dir.multiplyScalar(50);
+    // 		} else {
+    // 			return dir.multiplyScalar(10.0);
+    // 		}
+    // 	}
+    // });
+
+    // print("Setting up rules");
+    // flock.addRule('alignment', {
+    // 	before: function(entities) {
+    // 		// print("Alignment called");
+    // 	}
+    // });
 
     // flock.removeRule('gravity');
     // flock.enableRule('gravity');
@@ -154,6 +185,6 @@ if (typeof(Flock) !== 'function') {
             print("Error while calling from Script.scriptEnding: " + e);
         }
     });
-})();
+})
 
 

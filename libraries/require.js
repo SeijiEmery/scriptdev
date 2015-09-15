@@ -45,16 +45,14 @@
 				throw new TypeError("define() expected (string, Array, function), not (" +
 					Array.prototype.map.call(arguments, getType).join(', ') + ')');
 			}
-
-			print("defining " + name);
-
+			// print("defining " + name);
 			if (!modules[name]) {
 				modules[name] = {
 					deps: deps,
 					defn: defn
 				};
 			} else {
-				print("Overriding define() for '" + name + "'");
+				print("WARNING -- require.js: overriding define() for '" + name + "'");
 			}
 		}
 
@@ -71,7 +69,6 @@
 				} else if (modules[dep]) {
 					return tryLoad(dep, missingModules);
 				} else {
-					print("Missing " + dep);
 					missingModules.push(dep);
 					return null;
 				}
@@ -95,7 +92,7 @@
 				var loadedAll = true;
 				modules[name].deps.forEach(function(dep){
 					args.push(lastLoad = tryLoad(dep, missingDependencyList));
-					print("Last load (" + name + ") = " + lastLoad);
+					// print("Last load (" + name + ") = " + lastLoad);
 					loadedAll = (loadedAll && lastLoad);
 				});
 				if (loadedAll) {
@@ -103,7 +100,6 @@
 					return (loadedModules[name] = modules[name].defn.apply(this, args));
 				}
 			}
-			print("MIssing dependencies! " + name);
 			missingDependencyList.push(name);
 			return null;
 		}
@@ -118,9 +114,6 @@
 			var externals = Array.prototype.slice.call(arguments);
 			externals.modules = externals.modules || (externals.module ? [ externals.module ] : []);
 			externals.urls = externals.urls || (externals.url ? [ externals.url ] : []);
-
-			print("Adding externals");
-			print(JSON.stringify(externals));
 			externals.forEach(load);
 		}
 
@@ -132,9 +125,6 @@
 			var missingModules = externals.modules.filter(function(name) {
 				return !modules[name];
 			});
-			print("externals.modules = " + externals.modules.join(', '));
-			print("missingModules = " + missingModules.join(', '));
-
 			if (!fileAlreadyIncluded) {
 				if (missingModules.length > 0) {
 					includeUntilLoaded.call(this, externals.urls, externals.isLoaded || require.isLoaded, missingModules);
@@ -152,9 +142,7 @@
 					var oldModules = modules;
 					modules = modules.filter(function(name) {
 						return !extModules[name];
-					})
-					print("Old modules = " + oldModules.join(', '));
-					print("new modules = " + modules.join(', '));
+					});
 				}
 				filterModules();
 				var loadSatisified = function () {
@@ -165,16 +153,11 @@
 				// Try Script.include() on all urls until we find one that works
 				var lastUrl = "No Files!";
 				for (var i = 0, l = urls.length; i < l; ++i) {
-					print("Try loading url: " + urls[i]);
-					print("modules: " + Object.keys(extModules).join(', '));
 					Script.include(urls[i]);
-					print("modules: " + Object.keys(extModules).join(', '));
 
 					if (filterModules(), modules.length === 0) {
-						print("success!");
 						return true;
 					}
-					print("Failed");
 					lastUrl = urls[i];
 				}
 				var missingModules = modules.filter(function(name) {
@@ -190,18 +173,14 @@
 	}
 	var that = {};
 	if (typeof(this.require) === 'function') {
-		print("require() already included (...?)")
-		print("this.require = " + this.require);
-
 		__load__.call(that);
 		if (this.require && ("" + that.require) !== ("" + that.require)) {
-			print("require already defined as " + that.require);
-			print("replacing with " + this.require);
+			print("WARNING -- require.js: require already defined as " + that.require);
+			print("WARNING -- require.js: replacing with " + this.require);
 			this.require = that.require;
 			this.define = that.define;
 		}
 	} else {
-		print("Including require()");
 		__load__.call(this);
 
 	}

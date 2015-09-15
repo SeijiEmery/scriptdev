@@ -14,21 +14,27 @@
 (function () {
     include({
         files: [
-            { src: 'three/Three.js', check: function () { return typeof(THREE) !== 'undefined' }},
-            { src: 'three/math/src/Vector3.js', check: function () { return typeof(THREE.Vector3) !== 'undefined' }},
-            { src: 'require.js', check: function () { return typeof(require) === 'function' && typeof(define) === 'function' }},
-            { src: 'inject.js', check: function () { return typeof(inject) === 'function' }},
+            { src: 'three/Three.js',            check: function () { return exists(THREE) }},
+            { src: 'three/math/src/Vector3.js', check: function () { return exists(THREE.Vector3) }},
+            { src: 'require.js',                check: function () { return exists(require, define) }},
+            { src: 'inject.js',                 check: function () { return exists(inject) }},
+            { src: 'typecheck.js',              check: function () { return exists(getType) }},
             { src: 'arrayUtils.js' }
         ],
         paths: ['', 'https://dl.dropboxusercontent.com/u/4386006/hifi/js/libraries/']
     })
-
+    function exists(value) {
+        if (value instanceof Array) {
+            return value.reduce(function(x, v) { return x && exists(v); }, true);
+        }
+        return typeof(value) !== 'undefined';
+    }
     function include(context) {
         var loaded = {};
-        if (!context.paths) { 
+        if (!context.paths.length) {
             context.paths = ['']; 
         }
-        var failures = [];
+        var failures = [], details = [];
         context.files.forEach(function(file) {
             var loaded = false;
             context.paths.forEach(function(path) {
@@ -39,25 +45,35 @@
                     } catch (e) {
                         throw new Error("While loading '" + absPath + "': " + e.message);
                     }
-                    if (typeof(file.check) !== 'function' || file.check()) {
-                        loaded = true;
-                        print("Loaded " + file.src);
+                    if (typeof(file.check) === 'function') {
+                        if (!file.check()) {
+                            details.push("include check failed for " + file.src + " (" + absPath + ")");
+                            return;
+                        }
                     }
+                    loaded = true;
+                    // print("Loaded " + file.src);
                 }
             }, this);
             if (!loaded) {
                 failures.push(file.src);
+                if (!context.paths.length) {
+                    details.push("No paths specified for " + file.src);
+                }
             }
         }, this);
 
         if (failures.length > 0) {
             print("Failed to load " + failures.length + " file(s): " + failures.join(', '));
+            details.forEach(function(detail) {
+                print("    " + detail);
+            });
             throw new Error("Could not load flocking.js libraries");
         }
     }
 })();
 
-// Add console.log
+// Add console.log (if not defined)
 if (typeof(console) === 'undefined') {
     console = {
         log: function () {
@@ -80,10 +96,10 @@ if (typeof(THREE) === 'undefined') {
     toVector3 = function(vec3Obj) { return Vector3.prototype.clone.apply(vec3Obj); }
 }
 
-var exports = {};
-
 // Flocking class
-inject(exports, function () {
+(function() {
+    print("included flocking.js (setup)");
+
     var SIMULATE_PHYSICS_ON_SCRIPT = true; // enabled => script does physics calculations + sets entity positions; 
                                            // disabled => forces calculated by physics engine; script just sets velocity and queries current position + velocity each frame
     var DEFAULT_MAX_SPEED = 1.0;  // speed clamped to +/- MAX_SPEED. Can be set on each Flock instance.
@@ -97,6 +113,8 @@ inject(exports, function () {
     }
     // Entity class (just for flocking -- not exported)
     define('FlockingEntity', [], function() {
+        print("Included 'FlockingEntity'")
+
         function FlockingEntity (entityId, hasOwnership) {
             // Only includes flocking-specific properties
             var properties = Entities.getEntityProperties(entityId);
@@ -124,8 +142,10 @@ inject(exports, function () {
         return FlockingEntity;
     });
 
-    // Flock class
-    define('Flock', ['Rule', 'FlockingEntity'], function(Rule, FlockingEntity) {
+    // Flocking class
+    define('Flock', ['FlockingRule', 'FlockingEntity', 'TypeAnnotations'], function(Rule, FlockingEntity, TypeAnnotations) {
+        print("Included 'Flock'");
+
         // Simple flocking simulation.
         // Not tested (yet), and can be optimized as needed.
         function Flock () {
@@ -133,7 +153,7 @@ inject(exports, function () {
             // state (Entity.getProperties), and only send updates (Entity.editEntity). Furthermore, 
             // it's left up to the caller to ensure that our simulation instance is only called by one
             // thread.
-            this.simulatedEntities = [];
+            this.entities = [];
             
             // List of flocking rules, which implement the actual flocking behavior
             this.rules = {};
@@ -147,33 +167,63 @@ inject(exports, function () {
             this.POSITION_SYNC_THRESHOLD = 0.001;
             this.VELOCITY_SYNC_THRESHOLD = 0.001;
         }
-        inject(Flock.prototype, {
-            addEntity: addEntity,
-            removeEntity: removeEntity,
-            simulate: simulate,
-            addRule: addRule,
-            editRule: editRule,
-            deleteRule: deleteRule,
-            enableRule: enableRule,
-            disableRule: disableRule,
-            logWarning: logWarning,
-            logStatus: logStatus
-        })
+
+        var declType = function () {};
+
+        var injectMethods = TypeAnnotations.injectMethods;
+        var annotate      = TypeAnnotations.annotateMethod;
+        var EntityHandle = String;
+
+        injectMethods(Flock, [
+            annotate( addEntity,    { argtype: [ EntityHandle, [ Boolean ]  ] }),
+            annotate( removeEntity, { argtype: [ EntityHandle, [ Function ] ] }),
+            annotate( simulate,     { argtype: [ Number ] }),
+            annotate( addRule,      { argtype: [ String, Rule ] }),
+            annotate( editRule,     { argtype: [ String ] }),
+            annotate( deleteRule,   { argtype: [ String ] }),
+            annotate( enableRule,   { argtype: [ String ] }),
+            annotate( destroy,      { argtype: [] }),
+            annotate( logWarning,   { hidden: true }),
+            annotate( logStatus,    { hidden: true }),
+        ]);
+
+        // inject(Flock.prototype, {
+        //     addEntity:    addEntity    .withType(EntityHandle, ),
+        //     removeEntity: removeEntity .withType(EntityHandle,
+        //     simulate:     simulate     .withType(,
+        //     addRule:      addRule,
+        //     editRule:     editRule,
+        //     deleteRule:   deleteRule,
+        //     enableRule:   enableRule,
+        //     disableRule:  disableRule,
+        //     logWarning:   logWarning,
+        //     logStatus:    logStatus
+        // })
+
+        declType(logWarning,[String]);
         function logWarning(warning) {
             print("Warning (flocking.js) -- " + warning);
         }
+
+        declType(logStatus,[String]);
         function logStatus(status) {
             print("" + status);
         }
+        declType(addRule,[String, Rule], Rule);
         function addRule(name, rule) {
             if (typeof(name) !== 'string' || !(rule instanceof Rule)) {
-                throw new TypeError("Flock.addRule expected arguments of type (string, Rule), not (" +
-                    Array.prototype.map.call(arguments, function (arg) { return typeof(arg); }).join(', ') +
-                    ")");
+                var context = "";
+                if (typeof(name) === 'string')
+                    context += "name = '" + name + "'";
+                throw new TypeError("Flock.addRule("+context+") expected arguments of type (string, Rule), not (" +
+                    Array.prototype.map.call(arguments, function (arg) { return typeof(arg); }).join(', '));
             }
             this.logStatus("Adding flocking rule '" + name + "'");
             this.rules[name] = rule;
+            rule.name = name;
         }
+
+        declType(editRule,[String], Rule);
         function editRule(name) {
             if (this.rules[name]) {
                 return this.rules[name];  // Rule is just a declarative interface for setting its own properties, so this works
@@ -182,6 +232,8 @@ inject(exports, function () {
                 return null;
             }
         }
+
+        declType(deleteRule,[String]);
         function deleteRule(name) {
             if (this.rules[name]) {
                 delete this.rules[name];
@@ -190,6 +242,7 @@ inject(exports, function () {
                 this.logWarning("Flock.deleteRule has no effect: missing rule '" + name + "' to delete");
             }
         }
+        declType(enableRule,[String]);
         function enableRule(name) {
             if (!this.rules[name]) {
                 this.logWarning("Flock.enableRule has no effect: missing rule '" + name + "'");
@@ -199,6 +252,7 @@ inject(exports, function () {
             }
             print("rule '" + name + "' has been enabled");
         }
+        declType(disableRule,[String]);
         function disableRule(name) {
             if (!this.rules[name]) {
                 this.logWarning("Flock.disableRule has no effect: missing rule '" + name + "'")
@@ -210,10 +264,11 @@ inject(exports, function () {
 
         // Destroys the simulation.
         // Kills all entities we have ownership over.
+        declType(destroy,[]);
         function destroy () {
             try {
-                print("Teardown this.simulatedEntities.length = " + this.simulatedEntities.length);
-                this.simulatedEntities.forEach(function (entity) {
+                print("Teardown this.entities.length = " + this.entities.length);
+                this.entities.forEach(function (entity) {
                     if (entity.owned) {
                         print("Deleting entity " + entity.entityId);
                         Entities.deleteEntity(entity.entityId);
@@ -221,15 +276,16 @@ inject(exports, function () {
                         print("Not deleting entity " + entity.entityId);
                     }
                 });
-                this.simulatedEntities = [];
+                this.entities = [];
             } catch(err) {
                 print("teardown failed with error: " + err);
             }
         }
         // Run the simulation.
         // Should be called every frame update / as fast as possible.
-        function simulate (dt) {
-            var entities = this.simulatedEntities, N = this.simulatedEntities.length;
+        declType(simulate,[Number]);
+        function simulate(dt) {
+            var entities = this.entities, N = this.entities.length;
             var _this = this;
     
             var rules = [];
@@ -239,10 +295,16 @@ inject(exports, function () {
                 }
             });
             if (rules.length <= 0) {
-                print("flocking.js: No rules to execute -- skipping simulation");
+                if (!this.noSimRulesToExecute) { // Warn user just once (would flood logs otherwise)
+                    print("flocking.js: No rules to execute -- skipping simulation");
+                    this.noSimRulesToExecute = true;
+                }
                 return;
+            } else {
+                // Reset when/if we start running the simulation again 
+                this.noSimRulesToExecute = false;
             }
-    
+
             if (!(this.SIMULATE_PHYSICS_ON_SCRIPT || this._lastSimWasOnScript)) {
                 // Fetch current values for entities
                 entities.forEach(function(entity) {
@@ -256,7 +318,7 @@ inject(exports, function () {
             }
 
             // Apply flocking rules (real work done in the Rule class)
-            rules.forEach(Rule.__execRule);
+            rules.forEach(Rule.__execRule, this);
     
             // Apply updates
             if (this.SIMULATE_PHYSICS_ON_SCRIPT) {
@@ -302,33 +364,42 @@ inject(exports, function () {
         // @param entityId: the entity
         // @param hasOwnership (optional): signifies if we're allowed to delete this entity or
         //      not (true => yes, false => no). Defaults to false.
+        declType(addEntity,[EntityHandle, [ Boolean ]]);
         function addEntity(entityId, hasOwnership) {
-            this.simulatedEntities.push(new FlockingEntity(entityId, hasOwnership));
+            this.entities.push(new FlockingEntity(entityId, hasOwnership));
         }
         // Remove an entity from the simulation (by id).
         // Calls Entities.deleteEntity iff its ownership flag is set (from the attachEntity call)
+        declType(removeEntity,[EntityHandle, [ Function ]]);
         function removeEntity(entityId, deleteEntity) {
             // Find and remove entity
-            for (var i = 0; i < this.simulatedEntities.length; ++i) {
-                if (this.simulatedEntities[i].entityId === entityId) {
-                    if (this.simulatedEntities[i].__hasOwnership) {
-                        Entities.deleteEntity(this.simulatedEntities[i]);
+            for (var i = 0; i < this.entities.length; ++i) {
+                if (this.entities[i].entityId === entityId) {
+                    if (this.entities[i].__hasOwnership) {
+                        Entities.deleteEntity(this.entities[i]);
                     }
-                    this.simulatedEntities.removeAtIndex(i);    // added by arrayUtils.js
+                    this.entities.removeAtIndex(i);    // added by arrayUtils.js
                     return;
                 }
             }
             // else -- entity doesn't exist. do we care?
         }
         
+        declType(toString,[]);
         function toString () {
-            return "[Flock numEntities=" + this.simulatedEntities.length + ", numRules=" + Object.keys(this.rules).length + "]";
+            return "[Flock numEntities=" + this.entities.length + ", numRules=" + Object.keys(this.rules).length + "]";
         }
         return Flock;
     });
 
-    // Flocking rules class and internals
-    define('Rule', [], function() {
+    // Flocking rules class and internals. Uses metaprogramming extensively to construct an API that a) uses named functions
+    // to inject functionality, b) runs the injected functions within specific contexts (RULE_STAGES), and c) does so at specific
+    // intervals w/ externally defined state (this is tightly bound to the Flock class, but only interfaces via one function call).
+    //
+    // The backend is somewhat complicated, but to add new functionality (rule stages), just add stuff to RULE_STAGES and everything
+    // will automagically work.
+    //
+    define('FlockingRule', [], function() {
         function Rule () {
             this.enabled = true;
             this.__stages = {};
@@ -339,10 +410,14 @@ inject(exports, function () {
         };
 
         // Define the rules api.
-        // There are N stages (run in sequence), which each have a number of methods run at that point.
-        // Each of these methods _basically_ maps 1-1 w/ the corresponding methods on the rule api, and gets
-        // called with the arguments passed into it, `this` pointing to the current Flock instance, and they
-        // get magically invoked once every frame update (when you call flock.simulate).
+        // There are N stages (run in sequence), which each have a number of methods run at that point (this
+        // is done so we can have before/after method calls, and somewhat control the order of execution).
+        // Each of these methods _basically_ maps 1-1 w/ the corresponding methods on the rule api.
+        // When called, 
+        //      arguments  :=  args bound with new Rule().<method>(...), where <method> is the name defined here (before, eachEntity, etc)
+        //      this       :=  Flock instance bound to with <flock>.addRule(<rule-name>, new Rule().<...>)
+        //                     Any instance properties (this.entities, _technically_ this.rules, etc.,) are fully available here.
+        //                     Do NOT expose this to functions / arguments passed in (this.entities should be sufficient)
         var RULE_STAGES = [
             {
                 // Add behavior that gets executed before everything else
@@ -389,6 +464,9 @@ inject(exports, function () {
         RULE_STAGES.forEach(function(stage) {
             Object.keys(stage).forEach(function(k) {
                 Rule.prototype[k] = function () {
+                    // if (!(this instanceof Rule)) {
+                    //     throw new Error("Expected this in Rule."+k+" to be instance of Rule, not "+(this.prototype && this.prototype.constructor ? (this.prototype.constructor.name || "undefined-function") : this));
+                    // }
                     var args = Array.prototype.slice.call(arguments); // save args
                     if (!this.__stages[k]) {
                         this.__stages[k] = args;
@@ -400,20 +478,30 @@ inject(exports, function () {
                             if (v !== null) {
                                 this.__stages[k][i] = v;
                             }
-                        });
+                        }, this);
                     }
+                    return this;
                 }
+                Rule.prototype[k].name = k;
             })
         });
 
         var orderedStages = [];
         RULE_STAGES.forEach(function(stage) {
             Object.keys(stage).forEach(function(key) {
-                orderedStages.push({ key: key, fcn: RULE_STAGES[key] });
+                orderedStages.push({ key: key, fcn: stage[key] });
             })
-        })
+        });
+
+        /// Executes a rule from an external Flock / simulation instance (this === Flock instance)
         function executeRule(rule) {
+            // print("Executing rule " + rule.name)
+            // print("this is instance of " + (this.__proto__ && this.__proto__.constructor ? this.__proto__.constructor.name : "<none>"));
+            // print("this = " + this)
+            // print("json(this) = " + JSON.stringify(this));
+
             orderedStages.forEach(function(v) {
+                // print("orderedStages: v type: " + typeof(v) + ", v keys: " + Object.keys(v).join(', '))
                 try {
                     var stageArgs = rule.__stages[v.key];
                     if (stageArgs) {
@@ -424,21 +512,165 @@ inject(exports, function () {
                     print("Rule '" + rule.name + "' has been disabled.");
                     rule.enabled = false;
                 }
-            });
+            }, this);
         }
+
+        print("Constructed Rule");
+        var methods = Rule.prototype;
+        print("Rule methods: " + Object.keys(Rule.prototype).map(function(method) {
+            // if (typeof(method) === 'function') {
+                return ""+Rule.name+"."+method+" = "+Rule.prototype[method];
+            // } else {
+                // return "";
+            // }
+        }).join(', '));
         Rule.__execRule = executeRule;
         return Rule;
     });
 
-    print("Loaded flocking.js");
-    return exports;
-});
+    define('TypeAnnotations', [], function() {
+        print("Included 'TypeAnnotations'");
 
-// hack
-if (typeof(Flock) === 'undefined') {
-    Flock = exports.Flock;
-    Rule = exports.Rule;
-}
+        var PRIMITIVE_SINGLE_TYPE = 1,
+            PRIMITIVE_MULTIPLE_TYPE = 2,
+            PRIMITIVE_OPTIONAL_TYPE = 3,
+            CTOR_SINGLE_TYPE = 4,
+            CTOR_MULTIPLE_TYPE = 5,
+            CTOR_OPTIONAL_TYPE = 6,
+            ANY_TYPE = 7,
+            SPLAT_TYPE = 8;
 
+        var OPTIONS = {
+            USE_TYPE_CHECKS: true
+        }
+
+        function checkPrimitiveType(t) {
+            switch(t) {
+                case 'string': case 'number': case 'boolean': case 'object': case 'function': case 'undefined':
+                    return t;
+            }
+            throw new TypeError("Invalid type passed to annotate: '" + t + "'. Expected primitive type (typeof), or constructor type.");
+        }
+        function checkCtorType(t) {
+            switch(typeof(t)) {
+                case 'function': 
+                    if (!t.name)
+                        print("WARNING: Type passed to annotate() has no name: " + t);
+                    return t;
+            }
+            throw new TypeError("Invalid type passed to annotate: '" + (t.name || t) + "'. Expected primitive (typeof) or constructor type.");
+        }
+        var cp = checkPrimitiveType, ct = checkCtorType;
+
+        function annotate (method, properties) {
+            // if (!method.__annotations__) {
+            //     method.__annotations__ = {};
+            // }
+            if (properties.hidden) {
+                method.__dontMakePublic = true;     // ignored atm
+            }
+            if (properties.argtypes) {
+                method.__argtypes = properties.argtypes.map(function(t) {
+                    if (t instanceof Array) {
+                        switch (t.length) {
+                            case 0: // Polymorphic type
+                                return { 'kind': ANY_TYPE };
+                            case 1: // Optional type
+                                switch(typeof(t)) {
+                                    case 'string':   return { 'kind': PRIMITIVE_OPTIONAL_TYPE, 'type': cp(t) };
+                                    case 'function': return { 'kind': CTOR_OPTIONAL_TYPE, 'type': cc(t) };
+                                }
+                                break;
+                            default: // Multiple types
+                                switch(typeof(t)) {
+                                    case 'string': return { 'kind': PRIMITIVE_MULTIPLE_TYPE, 'type': cp(t) };
+                                    case 'function': return { 'kind': CTOR_MULTIPLE_TYPE, 'type': cc(t) };
+                                }
+                        }
+                    } else if (typeof(t) === 'string') {
+                        return { 'kind': PRIMITIVE_SINGLE_TYPE, 'type': cp(t) };
+                    } else if (typeof(t) === 'function') {
+                        return { 'kind': CTOR_SINGLE_TYPE, 'type': cc(t) };
+                    } else if (typeof(t) === 'object' && t.constructor) {
+                        return { 'kind': CTOR_SINGLE_TYPE, 'type': cc(t.constructor) };
+                    }
+                    throw new TypeError("Invalid type passed to annotate: '" + (t.name || t) + "'. Expected primitive type (typeof) or constructor type (function).");
+                });
+            }
+            return method;
+        }
+
+        function constructTypeCheckedMethod(method, typeArgs) {
+            // Crawl + validate args
+            var numOptional = 0;
+            var splat = false;
+
+            var optional = false;
+            for (var i = 0; i < typeArgs.length; ++i) {
+                switch (typeArgs[i]) {
+                    case PRIMITIVE_SINGLE_TYPE: case PRIMITIVE_MULTIPLE_TYPE: case CTOR_SINGLE_TYPE: case CTOR_MULTIPLE_TYPE:
+
+                    case PRIMITIVE_OPTIONAL_TYPE: case CTOR_OPTIONAL_TYPE:
+
+                    case SPLAT_TYPE:
+
+                    default:
+                        throw new Error("TypeAnnotations -- Internal Error: unhandled case type flag '" + typeArgs[i] + "''. Context: arg i = " + i + "; called on method: " + method);
+                }
+            }
+
+            if (minArgs) {
+                s += 'if (arguments.length > '
+            }
+
+            switch(typeArgs[i].kind) {
+                case PRIMITIVE_SINGLE_TYPE: return ' && typeof(arguments['+i+']) === "'+typeArgs[i].type+'"';
+                case CTOR_SINGLE_TYPE:      return ' && (arguments['+i+'] instanceof "'+typeArgs[i].type+'")';
+            }
+        }
+
+        function injectMethods(cls, methods) {
+            // print("injecting methods into " + cls);
+
+            // Check types
+            if (!(cls instanceof Function) || !(methods instanceof Array)) {
+                throw new TypeError("injectMethods(cls, methods) expected types (Function, Array), not " +
+                    "(" + Array.prototype.map.call(arguments, getType) + ")");
+            }
+
+            // Class (constructor function) must have a name
+            if (!cls.name) {
+                throw new TypeError("injectMethods(cls, ...) class function must be named");
+            }
+
+            // Check for methods w/ missing name fields (each method must be a named function)
+            var unnamedMethods = methods.filter(function(method) { return !method.name; });
+            if (unnamedMethods.length) {
+                throw new TypeError("injectMethods(cls, methods) -- " + unnamedMethods.length + " method(s) missing name field: " + unnamedMethods.join(', '));
+            }
+
+            // Check types + inject methods into class prototype
+            methods.forEach(function(method) {
+                if (cls.prototype[method.name]) {
+                    var fieldType = typeof(cls.prototype[method].name) === 'function' ? 'method' : 'field';
+                    if (fieldType === 'function' && (""+cls.prototype[method]) === (""+method)) {
+                        print("WARNING -- duplicate argument to injectMethods (already exists): " + method);
+                    } else {
+                        print("WARNING -- injectMethods overriding "+fieldType+" "+cls.name+"."+method.name+"(previous value: ");
+                    }
+                } else {
+                    // Inject method
+                    cls.prototype[method.name] = method;
+                }
+            });
+        }
+
+        return {
+            annotateMethod: annotate,
+            injectMethods: injectMethods,
+            options: OPTIONS
+        }
+    });
+})();
 
 
