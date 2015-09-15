@@ -96,7 +96,24 @@ if (typeof(THREE) === 'undefined') {
     toVector3 = function(vec3Obj) { return Vector3.prototype.clone.apply(vec3Obj); }
 }
 
-// Flocking class
+
+// Flocking impl
+//  Has four modules, defined w/ define() (./require.js)
+//  - Flock (public) -- exposes the Flock class (simulation manager, w/ methods to add / detach entities + flocking behavior (rules))
+//  - FlockingRule (public) -- Used to add rules (new Rule()) to the flocking simulation.
+//  - FlockingEntity (private) -- Wraps a hifi entity, exposing position/velocity/mass fields, and an addForce() method.
+//      Used internally, and exposed directly to the user to manipulate (though it shouldn't be instantiated).
+//  - TypeAnnotations -- internal module used to add dynamic typechecking (which can be disabled) to our API calls.
+//      Should be moved to an external file eventually.
+//
+// Definitions:
+//  Flock -- Flocking simulation. Has a list of FlockingEntities, and a list of Rules.
+//  FlockingEntity -- Hifi entity abstraction, with three flocking-related properties (.position, .velocity, and .mass),
+//      a few utility methods (.addForce), and .entityId (which gives you plenty of room to hang yourself, etc.,)
+//  Rule -- Abstraction of externally defined behavior that gets run on the simulation once / frame.
+//  Rule Stage -- A component of a rule, which defines how arbitrarily-bound user functions get invoked, and when (hence stage)
+//      To add new methods / calling contexts to the Rule API (.before(), .after(), etc), look at RULE_STAGES in the FlockingRule module.
+//
 (function() {
     print("included flocking.js (setup)");
 
