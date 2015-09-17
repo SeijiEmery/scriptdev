@@ -151,11 +151,26 @@ if (typeof(THREE) === 'undefined') {
         function toString () {
             return "[Entity " + this.entityId + "]";
         }
-        function applyForce(entity, force) {
-            if (force) {
-                entity.velocity.add(force.multiplyScalar(1 / entity.mass));
+        function applyForce(force) {
+            // print("Apply force");   
+            if (force && (force.x || force.y || force.z)) {
+                // print("Applying force: " + this.entityId + ": " + force);
+                this.velocity.add(force.multiplyScalar(1 / this.mass));
+            } else {
+                // print("No force: " + this.entityId + " (" + force + " )");
             }
         }
+        // function applyForce(entity, force) {
+        //     if (force && (force.x || force.y || force.z)) {
+        //         print("Applying force: " + entity.entityId + ": " + JSON.stringify(force));
+        //     } else {
+        //         print("No force (" + entity.entityId + ")");
+        //     }
+
+        //     if (force) {
+        //         entity.velocity.add(force.multiplyScalar(1 / entity.mass));
+        //     }
+        // }
         return FlockingEntity;
     });
 
@@ -334,8 +349,23 @@ if (typeof(THREE) === 'undefined') {
                 });
             }
 
+            var RUN_LIMIT = 2;
+            
+
             // Apply flocking rules (real work done in the Rule class)
-            rules.forEach(Rule.__execRule, this);
+            rules.forEach(function(rule) {
+               //  rule.runCount = rule.runCount ? rule.runCount + 1 : 1;
+               // if (rule.runCount > RUN_LIMIT) {
+               //      return;
+               //  }
+                // print("Rule " + rule.name);
+                if (rule.enabled) {
+                    Rule.__execRule.call(this, rule);
+                } else {
+                    // print("disabled");
+                }
+            }, this);
+            // rules.forEach(Rule.__execRule, this);
     
             // Apply updates
             if (this.SIMULATE_PHYSICS_ON_SCRIPT) {
@@ -353,6 +383,8 @@ if (typeof(THREE) === 'undefined') {
                     entity.position.x += entity.velocity.x * dt;
                     entity.position.y += entity.velocity.y * dt;
                     entity.position.z += entity.velocity.z * dt;
+
+                    // print("velocity: " + JSON.stringify(entity.velocity));
         
                     Entities.editEntity(entity.entityId, {
                         position: entity.position
@@ -418,6 +450,7 @@ if (typeof(THREE) === 'undefined') {
     //
     define('FlockingRule', [], function() {
         function Rule () {
+            this.name = null;
             this.enabled = true;
             this.__stages = {};
         }
@@ -435,21 +468,26 @@ if (typeof(THREE) === 'undefined') {
         //      this       :=  Flock instance bound to with <flock>.addRule(<rule-name>, new Rule().<...>)
         //                     Any instance properties (this.entities, _technically_ this.rules, etc.,) are fully available here.
         //                     Do NOT expose this to functions / arguments passed in (this.entities should be sufficient)
+        //      this.ctx   :=  tmp object that enables user function.
+        //
         var RULE_STAGES = [
             {
                 // Add behavior that gets executed before everything else
                 before: function(f) {
+                    // print("executing before, this = " + this + ", this.__type__ = " + (this.__proto__.constructor.name || 'anonymous-function'));
                     f.call(this.ctx, this.entities);
                 }
             }, {
                 // Add behavior (a function) that gets executed on every entity (entities, index i) in the simulation.
                 eachEntity: function(f) {
+                    // print("eachEntity");
                     for (var i = 0, n = this.entities.length; i < n; ++i) {
                         this.entities[i].applyForce(f.call(this.ctx, this.entities, i));
                     }
                 },
                 // Add behavior that gets executed on every two entities in the simulation (called on each)
                 eachTwoEntities: function(f) {
+                    // print("eachTwoEntities");
                     for (var i = 0, n = this.entities.length; i < n; ++i) {
                         for (var j = i + 1; j < n; ++j) {
                             this.entities[i].applyForce(f.call(this.ctx, this.entities, i, j));
@@ -459,6 +497,7 @@ if (typeof(THREE) === 'undefined') {
                 },
                 // Add behavior that gets executed on every two entities within range of each other.
                 eachTwoEntitiesInRange: function(range, f) {
+                    // print("eachTwoEntitiesInRange");
                     for (var i = 0, n = this.entities.length; i < n; ++i) {
                         for (var j = i + 1; j < n; ++j) {
                             if (this.entities[i].position.distanceTo(this.entities[j].position) <= range) {
@@ -471,6 +510,7 @@ if (typeof(THREE) === 'undefined') {
             }, {
                 // Behavior executed after all other calls have finished
                 after: function(f) {
+                    // print("after");
                     f.call(this.ctx, this.entities);
                 }
             }
@@ -481,6 +521,8 @@ if (typeof(THREE) === 'undefined') {
         RULE_STAGES.forEach(function(stage) {
             Object.keys(stage).forEach(function(k) {
                 Rule.prototype[k] = function () {
+                    // print("binding rule stage");
+
                     // if (!(this instanceof Rule)) {
                     //     throw new Error("Expected this in Rule."+k+" to be instance of Rule, not "+(this.prototype && this.prototype.constructor ? (this.prototype.constructor.name || "undefined-function") : this));
                     // }
@@ -512,7 +554,8 @@ if (typeof(THREE) === 'undefined') {
 
         /// Executes a rule from an external Flock / simulation instance (this === Flock instance)
         function executeRule(rule) {
-            // print("Executing rule " + rule.name)
+            // print("Executing rule " + rule.name + 
+                // ", this = " + this + ", this.__type__ = " + (this.__proto__.constructor.name || "anonymous-function"));
             // print("this is instance of " + (this.__proto__ && this.__proto__.constructor ? this.__proto__.constructor.name : "<none>"));
             // print("this = " + this)
             // print("json(this) = " + JSON.stringify(this));
@@ -521,7 +564,8 @@ if (typeof(THREE) === 'undefined') {
                 // print("orderedStages: v type: " + typeof(v) + ", v keys: " + Object.keys(v).join(', '))
                 try {
                     var stageArgs = rule.__stages[v.key];
-                    if (stageArgs) {
+                    if (stageArgs && stageArgs.length) {
+                        // print("Running stage " + v.key);
                         v.fcn.apply(this, stageArgs);
                     }
                 } catch (err) {
@@ -532,15 +576,15 @@ if (typeof(THREE) === 'undefined') {
             }, this);
         }
 
-        print("Constructed Rule");
+        // print("Constructed Rule");
         var methods = Rule.prototype;
-        print("Rule methods: " + Object.keys(Rule.prototype).map(function(method) {
-            // if (typeof(method) === 'function') {
-                return ""+Rule.name+"."+method+" = "+Rule.prototype[method];
-            // } else {
-                // return "";
-            // }
-        }).join(', '));
+        // print("Rule methods: " + Object.keys(Rule.prototype).map(function(method) {
+        //     // if (typeof(method) === 'function') {
+        //         return ""+Rule.name+"."+method+" = "+Rule.prototype[method];
+        //     // } else {
+        //         // return "";
+        //     // }
+        // }).join(', '));
         Rule.__execRule = executeRule;
         return Rule;
     });
@@ -647,7 +691,7 @@ if (typeof(THREE) === 'undefined') {
         }
 
         function injectMethods(cls, methods) {
-            // print("injecting methods into " + cls);
+            print("injecting " + methods.length + " methods into " + (cls.name || cls));
 
             // Check types
             if (!(cls instanceof Function) || !(methods instanceof Array)) {

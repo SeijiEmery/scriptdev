@@ -55,28 +55,48 @@ require(['Flock', 'FlockingRule'], function(Flock, Rule) {
 
     flock.addRule('gravity', new Rule()
     	.eachEntity(function(){
-    		return new Vector3(0, -0.1, 0);
+    		// return new Vector3(0, -0.1, 0);
     	}));
     flock.addRule('attraction', new Rule()
     	.before(function(entities) {
     		this.center = new Vector3();
+            entities.forEach(function(entity){
+                this.center.add(entity.position);
+            }, this);
+            this.center.multiplyScalar(1 / (entities.length || 0));
+            print("Center = " + center);
     	})
-    	.eachEntity(function(entity, i) {
-    		// ...
-    	}))
-
-
-    flock.addRule('localizedAttraction', new Rule()
-    	.before(function() { this.center = new Vector3(); })
-    	.eachTwoEntitiesInRange(10.0, function (entities, i, j) {
-    		this.center.set(0, 0, 0);
+    	.eachEntity(function(entities, i) {
+    		var dir = new Vector3().subVectors(this.center, entities[i].position);
+            return dir.multiplyScalar(3);
     	}));
 
-    // Edit rule: change range while preserving fcn
-    flock.editRule('localizedAttraction')
-    	.eachTwoEntitiesInRange(20.0, null);
 
-    flock.deleteRule('localizedAttraction');
+    // flock.addRule('localizedAttraction', new Rule()
+    // 	.before(function() { this.center = new Vector3(); })
+    // 	.eachTwoEntitiesInRange(10.0, function (entities, i, j) {
+    // 		this.center.set(0, 0, 0);
+    // 	}));
+    // flock.addRule('test', new Rule()
+    //     .before(function() { 
+    //         print("before" +
+    //             ", this = " + this + 
+    //             ", this.__type__ = " + (this.__proto__.constructor.name || 'anonymous-function')); 
+    //     })
+    //     .after(function() { 
+    //         print("after" + 
+    //             ", this = " + this + 
+    //             ", this.__type__ = " + (this.__proto__.constructor.name || "anonymous-function"));
+
+    //         // throw new Error("Stopping...");
+    //     })
+    // );
+
+    // Edit rule: change range while preserving fcn
+    // flock.editRule('localizedAttraction')
+    // 	.eachTwoEntitiesInRange(20.0, null);
+
+    // flock.deleteRule('localizedAttraction');
 
     // Attach rules
     // flock.addRule('gravity', {
