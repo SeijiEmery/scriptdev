@@ -7,12 +7,21 @@
 // Distributed under the Apache License, Version 2.0.
 // See the accompanying file LICENSE or http://www.apache.org/licenses/LICENSE-2.0.html
 //
-// Implements generic flocking behavior via the Flock class.
+// Implements generic flocking behavior.
 //
 
 // Load libraries
+var loadError = null;
 (function () {
-    include({
+    Script.include('./tryInclude.js');
+    if (typeof(tryInclude) !== 'function' || typeof(exists) !== 'function') {
+        Script.include('https://dl.dropboxusercontent.com/u/4386006/hifi/js/libraries/tryInclude.js');
+        if (typeof(tryInclude) !== 'function' || typeof(exists) !== 'function') {
+            throw new Error("Can't include include helper tryInclude.js");  // ironic
+        }
+    }
+    var errors = false;
+    tryInclude({
         files: [
             { src: 'three/Three.js',            check: function () { return exists(THREE) }},
             { src: 'three/math/src/Vector3.js', check: function () { return exists(THREE.Vector3) }},
@@ -21,57 +30,15 @@
             { src: 'typecheck.js',              check: function () { return exists(getType) }},
             { src: 'arrayUtils.js' }
         ],
-        paths: ['', 'https://dl.dropboxusercontent.com/u/4386006/hifi/js/libraries/']
-    })
-    function exists(value) {
-        if (value instanceof Array) {
-            return value.reduce(function(x, v) { return x && exists(v); }, true);
-        }
-        return typeof(value) !== 'undefined';
-    }
-    function include(context) {
-        var loaded = {};
-        if (!context.paths.length) {
-            context.paths = ['']; 
-        }
-        var failures = [], details = [];
-        context.files.forEach(function(file) {
-            var loaded = false;
-            context.paths.forEach(function(path) {
-                if (!loaded) {
-                    var absPath = path + file.src;
-                    try {
-                        Script.include(absPath)
-                    } catch (e) {
-                        throw new Error("While loading '" + absPath + "': " + e.message);
-                    }
-                    if (typeof(file.check) === 'function') {
-                        if (!file.check()) {
-                            details.push("include check failed for " + file.src + " (" + absPath + ")");
-                            return;
-                        }
-                    }
-                    loaded = true;
-                    // print("Loaded " + file.src);
-                }
-            }, this);
-            if (!loaded) {
-                failures.push(file.src);
-                if (!context.paths.length) {
-                    details.push("No paths specified for " + file.src);
-                }
-            }
-        }, this);
-
-        if (failures.length > 0) {
-            print("Failed to load " + failures.length + " file(s): " + failures.join(', '));
-            details.forEach(function(detail) {
-                print("    " + detail);
-            });
-            throw new Error("Could not load flocking.js libraries");
-        }
-    }
+        paths: ['./', 'https://dl.dropboxusercontent.com/u/4386006/hifi/js/libraries/']
+    }, function(err) {
+        loadError = err;
+    });
 })();
+if (loadError) {
+    throw new Error("Could not load libraries for flocking.js");
+}
+
 
 // Add console.log (if not defined)
 if (typeof(console) === 'undefined') {
