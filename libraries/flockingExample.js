@@ -10,15 +10,6 @@
 // Basic demo for the flocking.js library.
 //
 
-// Script.include('../../libraries/flocking.js')
-// if (typeof(Flock) !== 'function') {
-// 	print("Local include failed -- using global include");
-// 	Script.include('https://dl.dropboxusercontent.com/u/4386006/hifi/js/libraries/flocking.js');
-// 	if (typeof(Flock) !== 'function') {
-// 		throw new Error("Could not load the flocking library (flocking.js)")
-// 	}
-// }
-
 Script.include('require.js');
 require.externals({
 	modules: ['Flock'],
@@ -70,119 +61,6 @@ require(['Flock', 'FlockingRule'], function(Flock, Rule) {
     		var dir = new Vector3().subVectors(this.center, entities[i].position);
             return dir.multiplyScalar(3);
     	}));
-
-
-    // flock.addRule('localizedAttraction', new Rule()
-    // 	.before(function() { this.center = new Vector3(); })
-    // 	.eachTwoEntitiesInRange(10.0, function (entities, i, j) {
-    // 		this.center.set(0, 0, 0);
-    // 	}));
-    // flock.addRule('test', new Rule()
-    //     .before(function() { 
-    //         print("before" +
-    //             ", this = " + this + 
-    //             ", this.__type__ = " + (this.__proto__.constructor.name || 'anonymous-function')); 
-    //     })
-    //     .after(function() { 
-    //         print("after" + 
-    //             ", this = " + this + 
-    //             ", this.__type__ = " + (this.__proto__.constructor.name || "anonymous-function"));
-
-    //         // throw new Error("Stopping...");
-    //     })
-    // );
-
-    // Edit rule: change range while preserving fcn
-    // flock.editRule('localizedAttraction')
-    // 	.eachTwoEntitiesInRange(20.0, null);
-
-    // flock.deleteRule('localizedAttraction');
-
-    // Attach rules
-    // flock.addRule('gravity', {
-    // 	eachEntity: function () {
-    // 		return new Vector3(0, -0.1, 0);
-    // 	}
-    // });
-    // flock.addRule('attraction', {
-    // 	before: function (entities) {
-    // 		// Calculate average center of all entities
-    // 		this.center = new Vector3();
-    // 		entities.forEach(function (entity) {
-    // 			this.center.add(entity.position);
-    // 		}, this);
-    // 		this.center.multiplyScalar(1 / entities.length);
-    // 	},
-    // 	eachEntity: function (entities, i) {
-    // 		var dir = new Vector3().subVectors(this.center, entities[i].position);
-    // 		return dir.multiplyScalar(3);
-    // 	}
-    // });
-    // flock.addRule('separation', {
-    // 	eachTwoEntities: function (entities, i, j) {
-    // 		var dir = new Vector3().subVectors(entities[i].position, entities[j].position);
-    // 		if (dir.length < 1.0) {
-    // 			return dir.multiplyScalar(5);
-    // 		}
-    // 	}
-    // });
-    // flock.addRule('pullTowardsMe', {
-    // 	eachEntity: function (entities, i) {
-    // 		var dir = new Vector3.subVectors(MyAvatar.position, entities[i].position);
-    // 		if (dir.length >= 2.0) {
-    // 			return dir.multiplyScalar(50);
-    // 		} else {
-    // 			return dir.multiplyScalar(10.0);
-    // 		}
-    // 	}
-    // });
-
-    // print("Setting up rules");
-    // flock.addRule('alignment', {
-    // 	before: function(entities) {
-    // 		// print("Alignment called");
-    // 	}
-    // });
-
-    // flock.removeRule('gravity');
-    // flock.enableRule('gravity');
-    // flock.disableRule('gravity');
-    
-
-    // (function () {
-    //     function AttractorManager () {
-    //         this.attractorList = [];
-    //     }
-    //     function addAttractor(attractor) {
-    //         this.attractorList.push(attractor);
-    //     }
-    //     function update(dt) {
-    //         var deleteList = [];
-    //         this.attractorList.forEach(function (attractor, i) {
-    //             attractor.update(dt);
-    //             if (!attractor.isAlive()) {
-    //                 attractor.destroy();
-    //                 deleteList.push(i);
-    //             }
-    //         });
-    //         attractorList.removeIndices(deleteList);
-    //     }
-    //     var attractorMgr = null;
-
-    //     function Attractor(flock, position, strength, falloffFunc) {
-    //         if (!attractorMgr) {
-    //             attractorMgr = new AttractorManager();
-    //         }
-    //         attractorMgr.add(this);
-
-    //         this.flock = flock;
-    //         this.position = position;
-    //         this.strength = strength;
-    //         this.falloffFunc = falloffFunc;
-    //     }
-    // })();
-
-
 
     // limit speed to some defined value
     flock.MAX_SPEED = 10.0;
