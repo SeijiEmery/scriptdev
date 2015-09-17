@@ -10,19 +10,30 @@
 // Basic demo for the flocking.js library.
 //
 
+// Includes (messy)
 Script.include('require.js');
+if (typeof(require) !== 'function' || typeof(define) !== 'function') {
+    Script.include('https://dl.dropboxusercontent.com/u/4386006/hifi/scriptdev/libraries/require.js');
+    if (typeof(require) !== 'function' || typeof(define) !== 'function') {
+        throw new Error("Could not load 'require.js'")
+    }
+}
 require.externals({
-	modules: ['Flock'],
-	urls: ['flocking.js']
+    modules: ['Flock', 'FlockingRule'],
+    urls: [
+        'flocking.js',
+        // 'https://dl.dropboxusercontent.com/u/4386006/hifi/scriptdev/libraries/flocking.js' 
+    ]
 });
 
 // Example
-// (function () {
 require(['Flock', 'FlockingRule'], function(Flock, Rule) {
-    var flock = new Flock();
-    var NUM_ENTITIES = 20;
 
-    // Create entities
+    // Create flock
+    var flock = new Flock();
+
+    // Spawn + attach entities
+    var NUM_ENTITIES = 20;
     var center = MyAvatar.position;
     for (var i = 0; i < NUM_ENTITIES; ++i) {
         flock.addEntity(
@@ -44,6 +55,34 @@ require(['Flock', 'FlockingRule'], function(Flock, Rule) {
             }), true);
     }
 
+    // addRule(name, Rule)
+    // Rule API:
+    //      .before(function(entities)) -> this
+    //      .eachEntity(function(entities, i) -> Vector3) -> this
+    //      .eachTwoEntities(function(entities, i, j) -> Vector3) -> this
+    //      .eachTwoEntitiesInRange(dist, function(entities, i, j) -> Vector3) -> this
+    //      .after(function(entities)) -> this
+    // entities := Array<FlockingEntity>
+    // FlockingEntity := class w/
+    //      position: Vector3
+    //      velocity: Vector3
+    //      mass: Number,
+    //      applyForce: function(force: Vector3)
+    //
+    // Attach rule:
+    //      flock.addRule(name, Rule)
+    // Enable / disable rule:
+    //      flock.enableRule(name)
+    //      flock.disableRule(name)
+    // Edit rule:
+    //      flock.editRule(name) -> Rule
+    //          (can call methods on this to override original params. Pass null for no param change)
+    //          eg. flock.editRule('foo')
+    //              .eachEntity(new-function)
+    //          or  flock.editRule('bar')
+    //              .eachTwoEntitiesInRange(new-dist || null, new-func || null)
+    // Delete rule:
+    //     flock.deleteRule(name)
     flock.addRule('gravity', new Rule()
     	.eachEntity(function(){
     		// return new Vector3(0, -0.1, 0);

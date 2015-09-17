@@ -11,16 +11,8 @@
 //
 
 // Load libraries
-var loadError = null;
 (function () {
-    Script.include('./tryInclude.js');
-    if (typeof(tryInclude) !== 'function' || typeof(exists) !== 'function') {
-        Script.include('https://dl.dropboxusercontent.com/u/4386006/hifi/js/libraries/tryInclude.js');
-        if (typeof(tryInclude) !== 'function' || typeof(exists) !== 'function') {
-            throw new Error("Can't include include helper tryInclude.js");  // ironic
-        }
-    }
-    var errors = false;
+    var SCRIPT_NAME = "flocking.js";
     tryInclude({
         files: [
             { src: 'three/Three.js',            check: function () { return exists(THREE) }},
@@ -31,14 +23,55 @@ var loadError = null;
             { src: 'arrayUtils.js' }
         ],
         paths: ['./', 'https://dl.dropboxusercontent.com/u/4386006/hifi/js/libraries/']
-    }, function(err) {
-        loadError = err;
     });
-})();
-if (loadError) {
-    throw new Error("Could not load libraries for flocking.js");
-}
 
+    function tryInclude (context, callback) {
+        var loaded = {};
+        if (!context.paths.length) {
+            context.paths = ['']; 
+        }
+        var failures = [], details = [];
+        context.files.forEach(function(file) {
+            var loaded = false;
+            context.paths.forEach(function(path) {
+                if (!loaded) {
+                    var absPath = path + file.src;
+                    try {
+                        Script.include(absPath)
+                    } catch (e) {
+                        throw new Error("While loading '" + absPath + "': " + e.message);
+                    }
+                    if (typeof(file.check) === 'function') {
+                        if (!file.check()) {
+                            details.push("include check failed for " + file.src + " (" + absPath + ")");
+                            return;
+                        }
+                    }
+                    loaded = true;
+                    // print("Loaded " + file.src);
+                }
+            }, this);
+            if (!loaded) {
+                failures.push(file.src);
+                if (!context.paths.length) {
+                    details.push("No paths specified for " + file.src);
+                }
+            }
+        }, this);
+        if (failures.length > 0) {
+            print("Failed to load " + failures.length + " file(s): " + failures.join(', '));
+            details.forEach(function(detail) {
+                print("    " + detail);
+            });
+            throw new Error(""+SCRIPT_NAME+" failed to load file(s)");
+        }
+    }
+    function exists (x) {
+        if (typeof(x) === Array)
+            return x.reduce(function(x, v) { return x && tryInclude.exists(v); }, true);
+        return typeof(x) !== 'undefined' && x !== null;
+    }
+})();
 
 // Add console.log (if not defined)
 if (typeof(console) === 'undefined') {
